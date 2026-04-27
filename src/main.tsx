@@ -136,7 +136,18 @@ function App() {
 
           <section className='center-panel' aria-live='polite'>
             {showLobby && (
-              <article className='story-card story-card--ready'>
+              <article
+                className='story-card story-card--ready story-card--tap'
+                role='button'
+                tabIndex={0}
+                onClick={() => engineRef.current?.control('start')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    engineRef.current?.control('start');
+                  }
+                }}
+              >
                 <p className='story-card__kicker'>launch sequence</p>
                 <h2>Run through the temple.</h2>
                 <p>
@@ -145,7 +156,7 @@ function App() {
                 </p>
                 <div className='hint-row'>
                   <span>swipe left / right</span>
-                  <span>tap to begin</span>
+                  <span>tap anywhere to begin</span>
                   <span>up = jump</span>
                   <span>down = slide</span>
                 </div>
@@ -156,7 +167,18 @@ function App() {
             )}
 
             {showCrash && (
-              <article className='story-card story-card--crash'>
+              <article
+                className='story-card story-card--crash story-card--tap'
+                role='button'
+                tabIndex={0}
+                onClick={() => engineRef.current?.control('restart')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    engineRef.current?.control('restart');
+                  }
+                }}
+              >
                 <p className='story-card__kicker story-card__kicker--danger'>run ended</p>
                 <h2>Temple run failed.</h2>
                 <div className='result-grid'>
@@ -178,43 +200,47 @@ function App() {
                   <button type='button' className='primary-action' onClick={() => engineRef.current?.control('restart')}>
                     Run again
                   </button>
-                  <button type='button' className='secondary-action' onClick={() => engineRef.current?.control('start')}>
-                    Continue
+                  <button type='button' className='secondary-action' onClick={() => engineRef.current?.control('restart')}>
+                    Restart tap
                   </button>
                 </div>
               </article>
             )}
           </section>
 
-          {!isRunning && (
-            <footer className='bottom-dock'>
-              <div className='dock-card dock-card--status'>
-                <span>lane</span>
-                <strong>{snapshot.lane + 1} / 3</strong>
-              </div>
+          <footer className='bottom-dock'>
+            <div className='dock-card dock-card--status'>
+              <span>lane</span>
+              <strong>{snapshot.lane + 1} / 3</strong>
+            </div>
 
-              <div className='dock-controls' aria-label='game controls'>
-                {controls.map((control) => (
-                  <button
-                    key={control.label}
-                    type='button'
-                    className='control-button'
-                    onClick={() => engineRef.current?.control(control.action)}
-                    aria-label={control.label}
-                  >
-                    <span className='control-button__icon'>{control.icon}</span>
-                    <span className='control-button__label'>{control.label}</span>
-                  </button>
-                ))}
-              </div>
+            <div className='dock-controls' aria-label='game controls'>
+              {controls.map((control) => (
+                <button
+                  key={control.label}
+                  type='button'
+                  className='control-button'
+                  onClick={() => engineRef.current?.control(control.action)}
+                  aria-label={control.label}
+                >
+                  <span className='control-button__icon'>{control.icon}</span>
+                  <span className='control-button__label'>{control.label}</span>
+                </button>
+              ))}
+            </div>
 
-              <div className='dock-card dock-card--meter'>
-                <span>momentum</span>
-                <div className='momentum-track'>
-                  <i style={{ transform: `scaleX(${speedProgress})` }} />
-                </div>
+            <div className='dock-card dock-card--meter'>
+              <span>momentum</span>
+              <div className='momentum-track'>
+                <i style={{ transform: `scaleX(${speedProgress})` }} />
               </div>
-            </footer>
+            </div>
+          </footer>
+
+          {isRunning && (
+            <div className='running-tap-hint' aria-hidden='true'>
+              tap the bottom buttons for lane changes, jump, and slide
+            </div>
           )}
         </div>
 
