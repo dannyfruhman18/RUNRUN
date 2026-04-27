@@ -70,9 +70,19 @@ function App() {
   const showLobby = snapshot.phase === 'ready';
   const showCrash = snapshot.phase === 'crashed';
 
+  function handleShellPointerDown() {
+    if (snapshot.phase === 'ready') {
+      engineRef.current?.control('start');
+      return;
+    }
+    if (snapshot.phase === 'crashed') {
+      engineRef.current?.control('restart');
+    }
+  }
+
   return (
     <main className='shell'>
-      <section className='viewport-shell'>
+      <section className='viewport-shell' onPointerDown={handleShellPointerDown}>
         <div ref={mountRef} className='viewport' aria-label='RUNRUN game scene' />
         <div className={isRunning ? 'ui-layer ui-layer--running' : 'ui-layer'}>
           {!isRunning && (
