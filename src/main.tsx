@@ -33,14 +33,16 @@ function App() {
   useEffect(() => {
     const host = mountRef.current;
     if (!host) return;
+
     const engine = new RunRunGame(host, (next) => {
       setSnapshot((current) => ({ ...current, ...next }));
       try {
         window.localStorage.setItem(STORAGE_KEY, String(next.bestScore));
       } catch {
-        // ignore
+        // ignore storage failures
       }
     });
+
     engineRef.current = engine;
     return () => {
       engine.destroy();
@@ -58,61 +60,159 @@ function App() {
     [],
   );
 
+  const laneStyle = {
+    '--lane-index': String(snapshot.lane),
+  } as React.CSSProperties;
+
+  const speedProgress = Math.min(1, snapshot.speed / 28);
+  const scoreProgress = Math.min(1, snapshot.score / Math.max(1, snapshot.bestScore || 1200));
+
   return (
     <main className='shell'>
-      <div className='viewport-shell'>
-        <div ref={mountRef} className='viewport' />
-        <div className='hud'>
-          <header className='hud__top'>
-            <div>
-              <p className='eyebrow'>RUNRUN</p>
-              <h1>Temple Run 3D</h1>
+      <section className='viewport-shell'>
+        <div ref={mountRef} className='viewport' aria-label='RUNRUN game scene' />
+        <div className='ui-layer'>
+          <header className='top-hud'>
+            <div className='brand-lockup'>
+              <img src='/logo.svg' alt='' className='brand-mark' />
+              <div className='brand-copy'>
+                <p className='eyebrow'>RUNRUN</p>
+                <h1>Temple Run 3D</h1>
+                <span>Stone ruins, glowing relics, smooth endless run.</span>
+              </div>
             </div>
-            <div className='stats'>
-              <div className='stat'><span>score</span><strong>{snapshot.score}</strong></div>
-              <div className='stat'><span>best</span><strong>{snapshot.bestScore}</strong></div>
-              <div className='stat'><span>speed</span><strong>{snapshot.speed.toFixed(1)}</strong></div>
+
+            <div className='score-stack' aria-label='score summary'>
+              <div className='score-chip'>
+                <span>score</span>
+                <strong>{snapshot.score}</strong>
+              </div>
+              <div className='score-chip'>
+                <span>best</span>
+                <strong>{snapshot.bestScore}</strong>
+              </div>
+              <div className='score-chip score-chip--accent'>
+                <span>speed</span>
+                <strong>{snapshot.speed.toFixed(1)}</strong>
+              </div>
             </div>
           </header>
 
-          <section className='hud__status'>
-            <div>
-              <span>phase</span>
+          <aside className='left-rail' style={laneStyle} aria-label='lane indicator'>
+            <div className='lane-glyph'>
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className='meter-card'>
+              <span className='meter-card__label'>distance</span>
+              <strong>{snapshot.distance.toFixed(1)} m</strong>
+              <div className='meter-bar'>
+                <i style={{ transform: `scaleX(${scoreProgress})` }} />
+              </div>
+            </div>
+            <div className='meter-card meter-card--small'>
+              <span className='meter-card__label'>phase</span>
               <strong>{snapshot.phase}</strong>
             </div>
-            <div>
+          </aside>
+
+          <section className='center-panel' aria-live='polite'>
+            {snapshot.phase === 'ready' && (
+              <article className='story-card story-card--ready'>
+                <p className='story-card__kicker'>launch sequence</p>
+                <h2>Run through the temple.</h2>
+                <p>
+                  Swipe or use the controls to dodge obstacles, jump logs, slide under gates, and collect relics.
+                  The interface is now built as a polished stone-and-gold game screen, not a browser overlay.
+                </p>
+                <div className='hint-row'>
+                  <span>swipe left / right</span>
+                  <span>tap to begin</span>
+                  <span>up = jump</span>
+                  <span>down = slide</span>
+                </div>
+                <button type='button' className='primary-action' onClick={() => engineRef.current?.control('start')}>
+                  Enter the ruins
+                </button>
+              </article>
+            )}
+
+            {snapshot.phase === 'running' && (
+              <article className='status-banner'>
+                <span className='status-banner__dot' />
+                <p>{snapshot.message}</p>
+              </article>
+            )}
+
+            {snapshot.phase === 'crashed' && (
+              <article className='story-card story-card--crash'>
+                <p className='story-card__kicker story-card__kicker--danger'>run ended</p>
+                <h2>Temple run failed.</h2>
+                <div className='result-grid'>
+                  <div>
+                    <span>score</span>
+                    <strong>{snapshot.score}</strong>
+                  </div>
+                  <div>
+                    <span>best</span>
+                    <strong>{snapshot.bestScore}</strong>
+                  </div>
+                  <div>
+                    <span>distance</span>
+                    <strong>{snapshot.distance.toFixed(1)} m</strong>
+                  </div>
+                </div>
+                <p>{snapshot.message}</p>
+                <div className='action-row'>
+                  <button type='button' className='primary-action' onClick={() => engineRef.current?.control('restart')}>
+                    Run again
+                  </button>
+                  <button type='button' className='secondary-action' onClick={() => engineRef.current?.control('start')}>
+                    Continue
+                  </button>
+                </div>
+              </article>
+            )}
+          </section>
+
+          <footer className='bottom-dock'>
+            <div className='dock-card dock-card--status'>
               <span>lane</span>
               <strong>{snapshot.lane + 1} / 3</strong>
             </div>
-            <div>
-              <span>distance</span>
-              <strong>{snapshot.distance.toFixed(1)} m</strong>
+
+            <div className='dock-controls' aria-label='game controls'>
+              {controls.map((control) => (
+                <button
+                  key={control.label}
+                  type='button'
+                  className='control-button'
+                  onClick={() => engineRef.current?.control(control.action)}
+                  aria-label={control.label}
+                >
+                  <span className='control-button__icon'>{control.icon}</span>
+                  <span className='control-button__label'>{control.label}</span>
+                </button>
+              ))}
             </div>
-          </section>
 
-          <section className='hud__message'>
-            <p>{snapshot.message}</p>
-          </section>
-
-          <section className='hud__controls'>
-            {controls.map((control) => (
-              <button
-                key={control.label}
-                type='button'
-                className='control'
-                onClick={() => engineRef.current?.control(control.action)}
-                aria-label={control.label}
-              >
-                <span>{control.icon}</span>
-                <small>{control.label}</small>
-              </button>
-            ))}
-            <button type='button' className='control control--wide' onClick={() => engineRef.current?.control('restart')}>
-              Restart
-            </button>
-          </section>
+            <div className='dock-card dock-card--meter'>
+              <span>momentum</span>
+              <div className='momentum-track'>
+                <i style={{ transform: `scaleX(${speedProgress})` }} />
+              </div>
+            </div>
+          </footer>
         </div>
-      </div>
+
+        <div className='frame-overlay' aria-hidden='true'>
+          <span className='frame-overlay__corner frame-overlay__corner--tl' />
+          <span className='frame-overlay__corner frame-overlay__corner--tr' />
+          <span className='frame-overlay__corner frame-overlay__corner--bl' />
+          <span className='frame-overlay__corner frame-overlay__corner--br' />
+        </div>
+      </section>
     </main>
   );
 }
