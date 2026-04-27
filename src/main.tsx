@@ -13,6 +13,7 @@ import {
   type GameState,
   type MoveDirection,
 } from './game/runner';
+import { buildObstacleStyle, buildSceneFrame } from './scene/camera';
 
 const STORAGE_KEY = 'runrun.best-score';
 
@@ -114,13 +115,14 @@ function App() {
   const currentObstacleRects = game.obstacles.map((obstacle) => ({ obstacle, rect: obstacleRect(obstacle) }));
   const playerCollisions = currentObstacleRects.filter(({ rect }) => rectsOverlap(player, rect));
   const isDanger = game.phase === 'running' && playerCollisions.length > 0;
+  const scene = buildSceneFrame(game);
 
   return (
     <main className='app-shell'>
       <header className='topbar'>
         <div>
           <p className='eyebrow'>RUNRUN</p>
-          <h1>Endless runner prototype</h1>
+          <h1>3D runner prototype</h1>
         </div>
         <div className='pill-row'>
           <span className='pill'>Score {game.score}</span>
@@ -130,44 +132,67 @@ function App() {
       </header>
 
       <section className={'game-stage ' + (isDanger ? 'game-stage--danger' : '')} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-        <div className='sky-glow' />
-        <div className='road'>
-          <div className='lane lane--left' />
-          <div className='lane lane--right' />
-          <div className='road-edge road-edge--left' />
-          <div className='road-edge road-edge--right' />
-        </div>
+        <div className='scene-stage'>
+          <div className='scene-camera' style={scene.cameraStyle}>
+            <div className='sky-dome' />
+            <div className='cityline'>
+              <div className='tower tower--a' />
+              <div className='tower tower--b' />
+              <div className='tower tower--c' />
+              <div className='tower tower--d' />
+            </div>
 
-        <div className='lane-sense'>
-          <span>Swipe left / right</span>
-          <span>or tap the arrows</span>
-        </div>
+            <div className='lane-glow' style={scene.laneGlowStyle} />
+            <div className='track-plane' style={scene.trackStyle}>
+              <div className='track-grid' />
+              <div className='track-lane track-lane--left' />
+              <div className='track-lane track-lane--right' />
+              <div className='track-rail track-rail--left' />
+              <div className='track-rail track-rail--right' />
+            </div>
 
-        {game.obstacles.map((obstacle) => (
-          <div
-            key={obstacle.id}
-            className={'obstacle obstacle--' + obstacle.kind}
-            style={{
-              left: laneToX(obstacle.lane) + '%',
-              top: obstacle.y + '%',
-              width: obstacle.width + '%',
-              height: obstacle.height + '%',
-            }}
-          />
-        ))}
+            <div className='track-horizon' />
 
-        <div
-          className={'player ' + (game.phase === 'crashed' ? 'player--crashed' : '')}
-          style={{
-            left: laneToX(game.lane) + '%',
-            top: player.top + '%',
-            width: player.width + '%',
-            height: player.height + '%',
-          }}
-        >
-          <div className='player__head' />
-          <div className='player__body' />
-          <div className='player__shadow' />
+            {game.obstacles.map((obstacle) => (
+              <div
+                key={obstacle.id}
+                className={'obstacle obstacle--' + obstacle.kind}
+                style={{
+                  left: laneToX(obstacle.lane) + '%',
+                  top: obstacle.y + '%',
+                  width: obstacle.kind === 'truck' ? '16%' : '11.5%',
+                  height: obstacle.kind === 'truck' ? '17%' : '13%',
+                  ...buildObstacleStyle(obstacle),
+                }}
+              >
+                <div className='obstacle__body' />
+                <div className='obstacle__shine' />
+              </div>
+            ))}
+
+            <div
+              className={'runner-rig ' + (game.phase === 'crashed' ? 'runner-rig--crashed' : '')}
+              style={{
+                left: laneToX(game.lane) + '%',
+                top: player.top + '%',
+                width: player.width + '%',
+                height: player.height + '%',
+                ...scene.runnerStyle,
+              }}
+            >
+              <div className='runner-shadow' />
+              <div className='runner-backpack' />
+              <div className='runner-torso' />
+              <div className='runner-head' />
+              <div className='runner-arm runner-arm--left' />
+              <div className='runner-arm runner-arm--right' />
+              <div className='runner-leg runner-leg--left' />
+              <div className='runner-leg runner-leg--right' />
+              <div className='runner-visor' />
+            </div>
+
+            <div className='glow-ring' />
+          </div>
         </div>
 
         <div className='hud'>
@@ -185,11 +210,16 @@ function App() {
           </div>
         </div>
 
+        <div className='lane-sense'>
+          <span>Swipe left / right</span>
+          <span>or tap the arrows</span>
+        </div>
+
         {game.phase === 'ready' && (
           <div className='overlay overlay--ready'>
             <p className='overlay__eyebrow'>Tap to start</p>
-            <h2>Move left and right to dodge traffic.</h2>
-            <p>Every lane change starts the run. Keep climbing the speed curve and push for the highest score.</p>
+            <h2>Now rendering in a 3D lane tunnel.</h2>
+            <p>The runner, camera, and road are being shifted into a 3D presentation layer while lane logic stays live.</p>
           </div>
         )}
 
