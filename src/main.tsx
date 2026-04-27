@@ -9,6 +9,7 @@ import {
   playerRect,
   rectsOverlap,
   resetGame,
+  startRun,
   stepGame,
   type GameState,
   type MoveDirection,
@@ -39,22 +40,18 @@ function App() {
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, String(game.bestScore));
-    } catch {
-      // ignore storage failures
-    }
+    } catch {}
   }, [game.bestScore]);
 
   useEffect(() => {
     let frame = 0;
     let last = performance.now();
-
     const tick = (now: number) => {
       const dt = Math.min((now - last) / 1000, 0.034);
       last = now;
       setGame((current) => stepGame(current, dt));
       frame = window.requestAnimationFrame(tick);
     };
-
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
   }, []);
@@ -62,28 +59,20 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
-        event.preventDefault();
-        queueMove(-1);
-        return;
+        event.preventDefault(); queueMove(-1); return;
       }
       if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
-        event.preventDefault();
-        queueMove(1);
-        return;
+        event.preventDefault(); queueMove(1); return;
       }
       if (event.key === 'r' || event.key === 'R') {
-        event.preventDefault();
-        restart();
-        return;
+        event.preventDefault(); restart(); return;
       }
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (gameRef.current.phase === 'crashed') {
-          restart();
-        }
+        if (gameRef.current.phase === 'ready') setGame((current) => startRun(current));
+        else if (gameRef.current.phase === 'crashed') restart();
       }
     };
-
     window.addEventListener('keydown', onKeyDown, { passive: false } as AddEventListenerOptions);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
@@ -96,8 +85,13 @@ function App() {
     setGame((current) => resetGame(Math.max(current.bestScore, current.score)));
   }
 
+  function beginRun() {
+    setGame((current) => startRun(current));
+  }
+
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     gestureRef.current = { x: event.clientX, y: event.clientY, active: true };
+    if (gameRef.current.phase === 'ready') beginRun();
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
@@ -106,12 +100,11 @@ function App() {
     gestureRef.current.active = false;
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
-    if (Math.abs(dx) > 34 && Math.abs(dx) > Math.abs(dy)) {
-      queueMove(dx > 0 ? 1 : -1);
-    }
+    if (Math.abs(dx) > 34 && Math.abs(dx) > Math.abs(dy)) queueMove(dx > 0 ? 1 : -1);
+    else if (gameRef.current.phase === 'ready') beginRun();
   }
 
-  const player = playerRect(game.lane);
+  const player = playerRect(game.lane, game.laneOffset);
   const currentObstacleRects = game.obstacles.map((obstacle) => ({ obstacle, rect: obstacleRect(obstacle) }));
   const playerCollisions = currentObstacleRects.filter(({ rect }) => rectsOverlap(player, rect));
   const isDanger = game.phase === 'running' && playerCollisions.length > 0;
@@ -137,11 +130,13 @@ function App() {
             <div className='sky-dome' />
             <div className='jungle-mist jungle-mist--left' />
             <div className='jungle-mist jungle-mist--right' />
-            <div className='cityline'>
-              <div className='tower tower--a' />
-              <div className='tower tower--b' />
-              <div className='tower tower--c' />
-              <div className='tower tower--d' />
+            <div className='temple-arch temple-arch--left' />
+            <div className='temple-arch temple-arch--right' />
+            <div className='ruins-backdrop' style={scene.backdropStyle}>
+              <div className='ruin ruin--a' />
+              <div className='ruin ruin--b' />
+              <div className='ruin ruin--c' />
+              <div className='ruin ruin--d' />
             </div>
 
             <div className='lane-glow' style={scene.laneGlowStyle} />
@@ -151,6 +146,8 @@ function App() {
               <div className='track-lane track-lane--right' />
               <div className='track-rail track-rail--left' />
               <div className='track-rail track-rail--right' />
+              <div className='track-crack track-crack--a' />
+              <div className='track-crack track-crack--b' />
             </div>
 
             <div className='track-horizon' />
@@ -169,19 +166,11 @@ function App() {
               >
                 <div className='obstacle__body' />
                 <div className='obstacle__shine' />
+                <div className='obstacle__shadow' />
               </div>
             ))}
 
-            <div
-              className={'runner-rig ' + (game.phase === 'crashed' ? 'runner-rig--crashed' : '')}
-              style={{
-                left: laneToX(game.lane) + '%',
-                top: player.top + '%',
-                width: player.width + '%',
-                height: player.height + '%',
-                ...scene.runnerStyle,
-              }}
-            >
+            <div className={'runner-rig ' + (game.phase === 'crashed' ? 'runner-rig--crashed' : '')} style={{ left: laneToX(game.lane) + '%', top: player.top + '%', width: player.width + '%', height: player.height + '%', ...scene.runnerStyle }}>
               <div className='runner-shadow' />
               <div className='runner-backpack' />
               <div className='runner-torso' />
@@ -198,30 +187,18 @@ function App() {
         </div>
 
         <div className='hud'>
-          <div>
-            <p className='hud__label'>status</p>
-            <p className='hud__value'>{game.phase === 'ready' ? 'Ready' : game.phase === 'running' ? 'Running' : 'Crashed'}</p>
-          </div>
-          <div>
-            <p className='hud__label'>lane</p>
-            <p className='hud__value'>{game.lane + 1} / 3</p>
-          </div>
-          <div>
-            <p className='hud__label'>route</p>
-            <p className='hud__value'>{Math.floor(game.distance * 10)} m</p>
-          </div>
+          <div><p className='hud__label'>status</p><p className='hud__value'>{game.phase === 'ready' ? 'Ready' : game.phase === 'running' ? 'Running' : 'Crashed'}</p></div>
+          <div><p className='hud__label'>lane</p><p className='hud__value'>{game.lane + 1} / 3</p></div>
+          <div><p className='hud__label'>route</p><p className='hud__value'>{Math.floor(game.distance * 10)} m</p></div>
         </div>
 
-        <div className='lane-sense'>
-          <span>Swipe left / right</span>
-          <span>or tap the arrows</span>
-        </div>
+        <div className='lane-sense'><span>Swipe left / right</span><span>or tap to start</span></div>
 
         {game.phase === 'ready' && (
           <div className='overlay overlay--ready'>
             <p className='overlay__eyebrow'>Tap to start</p>
             <h2>Temple bridge, behind-the-back camera, live 3D runner.</h2>
-            <p>The runner, ruins, and perspective tunnel are now rendered as a Temple Run-style scene with depth, motion, and lane-based collisions.</p>
+            <p>The runner, ruins, and perspective tunnel are now rendered as a polished Temple Run-style scene with smoother motion, depth layers, and cleaner lighting.</p>
           </div>
         )}
 
@@ -244,8 +221,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

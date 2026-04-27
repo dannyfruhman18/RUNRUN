@@ -10,11 +10,14 @@ export interface Obstacle {
   y: number;
   width: number;
   height: number;
+  wobble: number;
+  spin: number;
 }
 
 export interface GameState {
   phase: GamePhase;
   lane: LaneIndex;
+  laneOffset: number;
   score: number;
   bestScore: number;
   distance: number;
@@ -32,19 +35,14 @@ export interface Rect {
 }
 
 export const LANE_CENTERS: readonly [number, number, number] = [18, 50, 82];
-export const LANE_MARKERS: readonly [number, number] = [34, 66];
-export const PLAYER_RECT = {
-  width: 10.5,
-  height: 13,
-  top: 78.5,
-} as const;
+export const PLAYER_RECT = { width: 10.5, height: 13, top: 78.5 } as const;
 export const ROAD_BOTTOM = 112;
-export const ROAD_TOP = -18;
-const BASE_SPEED = 30;
-const MAX_SPEED = 58;
-const ACCELERATION = 0.58;
-const INITIAL_SPAWN_DELAY = 0.85;
-const MIN_SPAWN_DELAY = 0.38;
+export const ROAD_TOP = -20;
+const BASE_SPEED = 31;
+const MAX_SPEED = 62;
+const ACCELERATION = 0.72;
+const INITIAL_SPAWN_DELAY = 0.82;
+const MIN_SPAWN_DELAY = 0.34;
 const OBSTACLE_SERIAL = { value: 1 };
 
 function clampLane(lane: number): LaneIndex {
@@ -68,11 +66,11 @@ function nextObstacleId(): number {
 }
 
 function laneWidth(kind: ObstacleKind): number {
-  return kind === 'truck' ? 13.5 : 10.5;
+  return kind === 'truck' ? 13.8 : 10.8;
 }
 
 function obstacleHeight(kind: ObstacleKind): number {
-  return kind === 'truck' ? 12.5 : 10.5;
+  return kind === 'truck' ? 13.2 : 10.8;
 }
 
 function makeObstacle(lane: LaneIndex, kind: ObstacleKind): Obstacle {
@@ -83,6 +81,8 @@ function makeObstacle(lane: LaneIndex, kind: ObstacleKind): Obstacle {
     y: ROAD_TOP,
     width: laneWidth(kind),
     height: obstacleHeight(kind),
+    wobble: rand(-2, 2),
+    spin: rand(-8, 8),
   };
 }
 
@@ -91,13 +91,13 @@ function choosePattern(speed: number): LaneIndex[][] {
   const pair: LaneIndex[][] = [[0, 2], [0, 1], [1, 2]];
   const mixed: LaneIndex[][] = [[0], [2], [1], [0, 2], [0, 1], [1, 2]];
   if (speed < 38) return mixed;
-  if (speed < 48) return Math.random() < 0.55 ? pair : mixed;
-  return Math.random() < 0.4 ? pair : single;
+  if (speed < 50) return Math.random() < 0.52 ? pair : mixed;
+  return Math.random() < 0.42 ? pair : single;
 }
 
 function spawnWave(speed: number): Obstacle[] {
   const pattern = pick(choosePattern(speed));
-  const kindBias = speed > 44 ? 0.5 : 0.72;
+  const kindBias = speed > 46 ? 0.48 : 0.72;
   return pattern.map((lane) => {
     const kind: ObstacleKind = Math.random() < kindBias ? 'barrier' : 'truck';
     return makeObstacle(lane, kind);
@@ -109,16 +109,14 @@ export function laneToX(lane: LaneIndex): number {
 }
 
 export function rectsOverlap(a: Rect, b: Rect): boolean {
-  return a.left < b.left + b.width &&
-    a.left + a.width > b.left &&
-    a.top < b.top + b.height &&
-    a.top + a.height > b.top;
+  return a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top;
 }
 
 export function createGame(bestScore = 0): GameState {
   return {
     phase: 'ready',
     lane: 1,
+    laneOffset: 0,
     score: 0,
     bestScore,
     distance: 0,
@@ -136,24 +134,17 @@ export function resetGame(bestScore = 0): GameState {
 export function movePlayer(state: GameState, direction: MoveDirection): GameState {
   if (state.phase === 'crashed') return state;
   const nextLane = clampLane(state.lane + direction);
-  return {
-    ...state,
-    phase: 'running',
-    lane: nextLane,
-  };
+  return { ...state, phase: 'running', lane: nextLane };
 }
 
 export function startRun(state: GameState): GameState {
-  if (state.phase === 'crashed' || state.phase === 'running') return state;
-  return {
-    ...state,
-    phase: 'running',
-  };
+  if (state.phase !== 'ready') return state;
+  return { ...state, phase: 'running' };
 }
 
-export function playerRect(lane: LaneIndex): Rect {
+export function playerRect(lane: LaneIndex, laneOffset = 0): Rect {
   return {
-    left: laneToX(lane) - PLAYER_RECT.width / 2,
+    left: laneToX(lane) - PLAYER_RECT.width / 2 + laneOffset,
     top: PLAYER_RECT.top,
     width: PLAYER_RECT.width,
     height: PLAYER_RECT.height,
@@ -171,12 +162,14 @@ export function obstacleRect(obstacle: Obstacle): Rect {
 
 export function stepGame(state: GameState, dt: number): GameState {
   if (state.phase !== 'running') {
-    return state;
+    const laneOffset = state.laneOffset + (0 - state.laneOffset) * Math.min(1, dt * 10);
+    return { ...state, laneOffset };
   }
 
   const speed = Math.min(MAX_SPEED, state.speed + ACCELERATION * dt);
   const distance = state.distance + speed * dt;
-  const score = Math.max(state.score, Math.floor(distance * 12));
+  const score = Math.max(state.score, Math.floor(distance * 12.5));
+  const laneOffset = state.laneOffset + (0 - state.laneOffset) * Math.min(1, dt * 12.5);
   let spawnTimer = state.spawnTimer - dt;
   let obstacles = state.obstacles
     .map((obstacle) => ({ ...obstacle, y: obstacle.y + speed * dt }))
@@ -184,10 +177,10 @@ export function stepGame(state: GameState, dt: number): GameState {
 
   while (spawnTimer <= 0) {
     obstacles = [...spawnWave(speed), ...obstacles];
-    spawnTimer += Math.max(MIN_SPAWN_DELAY, INITIAL_SPAWN_DELAY - speed * 0.0038);
+    spawnTimer += Math.max(MIN_SPAWN_DELAY, INITIAL_SPAWN_DELAY - speed * 0.0036);
   }
 
-  const player = playerRect(state.lane);
+  const player = playerRect(state.lane, laneOffset);
   const hit = obstacles.find((obstacle) => rectsOverlap(player, obstacleRect(obstacle)));
 
   if (hit) {
@@ -197,6 +190,7 @@ export function stepGame(state: GameState, dt: number): GameState {
       speed,
       distance,
       score,
+      laneOffset,
       bestScore: Math.max(state.bestScore, score),
       crashReason: hit.kind === 'truck' ? 'You clipped a truck.' : 'You hit an obstacle.',
       obstacles,
@@ -210,6 +204,7 @@ export function stepGame(state: GameState, dt: number): GameState {
     distance,
     score,
     bestScore: Math.max(state.bestScore, score),
+    laneOffset,
     crashReason: null,
     obstacles,
     spawnTimer,
