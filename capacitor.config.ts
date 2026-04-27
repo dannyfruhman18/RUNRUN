@@ -1,10 +1,10 @@
-import type { CapacitorConfig } from '@capacitor/cli'
+import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.poke.runrun',
+  appId: 'com.dannyfruhman.runrun',
   appName: 'RUNRUN',
   webDir: 'dist',
   bundledWebRuntime: false,
-}
+};
 
-export default config
+export default config;
