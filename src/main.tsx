@@ -66,59 +66,66 @@ function App() {
 
   const speedProgress = Math.min(1, snapshot.speed / 28);
   const scoreProgress = Math.min(1, snapshot.score / Math.max(1, snapshot.bestScore || 1200));
+  const isRunning = snapshot.phase === 'running';
+  const showLobby = snapshot.phase === 'ready';
+  const showCrash = snapshot.phase === 'crashed';
 
   return (
     <main className='shell'>
       <section className='viewport-shell'>
         <div ref={mountRef} className='viewport' aria-label='RUNRUN game scene' />
-        <div className='ui-layer'>
-          <header className='top-hud'>
-            <div className='brand-lockup'>
-              <img src='/logo.svg' alt='' className='brand-mark' />
-              <div className='brand-copy'>
-                <p className='eyebrow'>RUNRUN</p>
-                <h1>Temple Run 3D</h1>
-                <span>Stone ruins, glowing relics, smooth endless run.</span>
-              </div>
-            </div>
+        <div className={isRunning ? 'ui-layer ui-layer--running' : 'ui-layer'}>
+          {!isRunning && (
+            <>
+              <header className='top-hud'>
+                <div className='brand-lockup'>
+                  <img src='/logo.svg' alt='' className='brand-mark' />
+                  <div className='brand-copy'>
+                    <p className='eyebrow'>RUNRUN</p>
+                    <h1>Temple Run 3D</h1>
+                    <span>Stone ruins, glowing relics, smooth endless run.</span>
+                  </div>
+                </div>
 
-            <div className='score-stack' aria-label='score summary'>
-              <div className='score-chip'>
-                <span>score</span>
-                <strong>{snapshot.score}</strong>
-              </div>
-              <div className='score-chip'>
-                <span>best</span>
-                <strong>{snapshot.bestScore}</strong>
-              </div>
-              <div className='score-chip score-chip--accent'>
-                <span>speed</span>
-                <strong>{snapshot.speed.toFixed(1)}</strong>
-              </div>
-            </div>
-          </header>
+                <div className='score-stack' aria-label='score summary'>
+                  <div className='score-chip'>
+                    <span>score</span>
+                    <strong>{snapshot.score}</strong>
+                  </div>
+                  <div className='score-chip'>
+                    <span>best</span>
+                    <strong>{snapshot.bestScore}</strong>
+                  </div>
+                  <div className='score-chip score-chip--accent'>
+                    <span>speed</span>
+                    <strong>{snapshot.speed.toFixed(1)}</strong>
+                  </div>
+                </div>
+              </header>
 
-          <aside className='left-rail' style={laneStyle} aria-label='lane indicator'>
-            <div className='lane-glyph'>
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className='meter-card'>
-              <span className='meter-card__label'>distance</span>
-              <strong>{snapshot.distance.toFixed(1)} m</strong>
-              <div className='meter-bar'>
-                <i style={{ transform: `scaleX(${scoreProgress})` }} />
-              </div>
-            </div>
-            <div className='meter-card meter-card--small'>
-              <span className='meter-card__label'>phase</span>
-              <strong>{snapshot.phase}</strong>
-            </div>
-          </aside>
+              <aside className='left-rail' data-lane={snapshot.lane} style={laneStyle} aria-label='lane indicator'>
+                <div className='lane-glyph'>
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div className='meter-card'>
+                  <span className='meter-card__label'>distance</span>
+                  <strong>{snapshot.distance.toFixed(1)} m</strong>
+                  <div className='meter-bar'>
+                    <i style={{ transform: `scaleX(${scoreProgress})` }} />
+                  </div>
+                </div>
+                <div className='meter-card meter-card--small'>
+                  <span className='meter-card__label'>phase</span>
+                  <strong>{snapshot.phase}</strong>
+                </div>
+              </aside>
+            </>
+          )}
 
           <section className='center-panel' aria-live='polite'>
-            {snapshot.phase === 'ready' && (
+            {showLobby && (
               <article className='story-card story-card--ready'>
                 <p className='story-card__kicker'>launch sequence</p>
                 <h2>Run through the temple.</h2>
@@ -138,14 +145,7 @@ function App() {
               </article>
             )}
 
-            {snapshot.phase === 'running' && (
-              <article className='status-banner'>
-                <span className='status-banner__dot' />
-                <p>{snapshot.message}</p>
-              </article>
-            )}
-
-            {snapshot.phase === 'crashed' && (
+            {showCrash && (
               <article className='story-card story-card--crash'>
                 <p className='story-card__kicker story-card__kicker--danger'>run ended</p>
                 <h2>Temple run failed.</h2>
@@ -176,42 +176,46 @@ function App() {
             )}
           </section>
 
-          <footer className='bottom-dock'>
-            <div className='dock-card dock-card--status'>
-              <span>lane</span>
-              <strong>{snapshot.lane + 1} / 3</strong>
-            </div>
-
-            <div className='dock-controls' aria-label='game controls'>
-              {controls.map((control) => (
-                <button
-                  key={control.label}
-                  type='button'
-                  className='control-button'
-                  onClick={() => engineRef.current?.control(control.action)}
-                  aria-label={control.label}
-                >
-                  <span className='control-button__icon'>{control.icon}</span>
-                  <span className='control-button__label'>{control.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className='dock-card dock-card--meter'>
-              <span>momentum</span>
-              <div className='momentum-track'>
-                <i style={{ transform: `scaleX(${speedProgress})` }} />
+          {!isRunning && (
+            <footer className='bottom-dock'>
+              <div className='dock-card dock-card--status'>
+                <span>lane</span>
+                <strong>{snapshot.lane + 1} / 3</strong>
               </div>
-            </div>
-          </footer>
+
+              <div className='dock-controls' aria-label='game controls'>
+                {controls.map((control) => (
+                  <button
+                    key={control.label}
+                    type='button'
+                    className='control-button'
+                    onClick={() => engineRef.current?.control(control.action)}
+                    aria-label={control.label}
+                  >
+                    <span className='control-button__icon'>{control.icon}</span>
+                    <span className='control-button__label'>{control.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className='dock-card dock-card--meter'>
+                <span>momentum</span>
+                <div className='momentum-track'>
+                  <i style={{ transform: `scaleX(${speedProgress})` }} />
+                </div>
+              </div>
+            </footer>
+          )}
         </div>
 
-        <div className='frame-overlay' aria-hidden='true'>
-          <span className='frame-overlay__corner frame-overlay__corner--tl' />
-          <span className='frame-overlay__corner frame-overlay__corner--tr' />
-          <span className='frame-overlay__corner frame-overlay__corner--bl' />
-          <span className='frame-overlay__corner frame-overlay__corner--br' />
-        </div>
+        {!isRunning && (
+          <div className='frame-overlay' aria-hidden='true'>
+            <span className='frame-overlay__corner frame-overlay__corner--tl' />
+            <span className='frame-overlay__corner frame-overlay__corner--tr' />
+            <span className='frame-overlay__corner frame-overlay__corner--bl' />
+            <span className='frame-overlay__corner frame-overlay__corner--br' />
+          </div>
+        )}
       </section>
     </main>
   );
