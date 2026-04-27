@@ -1,22 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import {
-  createGame,
-  laneToX,
-  movePlayer,
-  obstacleRect,
-  playerRect,
-  rectsOverlap,
-  resetGame,
-  startRun,
-  stepGame,
-  type GameState,
-  type MoveDirection,
-} from './game/runner';
-import { buildObstacleStyle, buildSceneFrame } from './scene/camera';
+import { RunRunGame, type GameSnapshot } from './runrun3d';
 
 const STORAGE_KEY = 'runrun.best-score';
+
+const initialSnapshot: GameSnapshot = {
+  phase: 'ready',
+  score: 0,
+  bestScore: 0,
+  speed: 0,
+  distance: 0,
+  lane: 1,
+  message: 'Tap, swipe, or press any move key to start.',
+};
 
 function readBestScore(): number {
   try {
@@ -29,196 +26,99 @@ function readBestScore(): number {
 }
 
 function App() {
-  const [game, setGame] = useState<GameState>(() => createGame(readBestScore()));
-  const gameRef = useRef(game);
-  const gestureRef = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const engineRef = useRef<RunRunGame | null>(null);
+  const [snapshot, setSnapshot] = useState<GameSnapshot>(() => ({ ...initialSnapshot, bestScore: readBestScore() }));
 
   useEffect(() => {
-    gameRef.current = game;
-  }, [game]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, String(game.bestScore));
-    } catch {}
-  }, [game.bestScore]);
-
-  useEffect(() => {
-    let frame = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 0.034);
-      last = now;
-      setGame((current) => stepGame(current, dt));
-      frame = window.requestAnimationFrame(tick);
+    const host = mountRef.current;
+    if (!host) return;
+    const engine = new RunRunGame(host, (next) => {
+      setSnapshot((current) => ({ ...current, ...next }));
+      try {
+        window.localStorage.setItem(STORAGE_KEY, String(next.bestScore));
+      } catch {
+        // ignore
+      }
+    });
+    engineRef.current = engine;
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
     };
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
-        event.preventDefault(); queueMove(-1); return;
-      }
-      if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
-        event.preventDefault(); queueMove(1); return;
-      }
-      if (event.key === 'r' || event.key === 'R') {
-        event.preventDefault(); restart(); return;
-      }
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        if (gameRef.current.phase === 'ready') setGame((current) => startRun(current));
-        else if (gameRef.current.phase === 'crashed') restart();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, { passive: false } as AddEventListenerOptions);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  function queueMove(direction: MoveDirection) {
-    setGame((current) => movePlayer(current, direction));
-  }
-
-  function restart() {
-    setGame((current) => resetGame(Math.max(current.bestScore, current.score)));
-  }
-
-  function beginRun() {
-    setGame((current) => startRun(current));
-  }
-
-  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    gestureRef.current = { x: event.clientX, y: event.clientY, active: true };
-    if (gameRef.current.phase === 'ready') beginRun();
-  }
-
-  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    const gesture = gestureRef.current;
-    if (!gesture.active) return;
-    gestureRef.current.active = false;
-    const dx = event.clientX - gesture.x;
-    const dy = event.clientY - gesture.y;
-    if (Math.abs(dx) > 34 && Math.abs(dx) > Math.abs(dy)) queueMove(dx > 0 ? 1 : -1);
-    else if (gameRef.current.phase === 'ready') beginRun();
-  }
-
-  const player = playerRect(game.lane, game.laneOffset);
-  const currentObstacleRects = game.obstacles.map((obstacle) => ({ obstacle, rect: obstacleRect(obstacle) }));
-  const playerCollisions = currentObstacleRects.filter(({ rect }) => rectsOverlap(player, rect));
-  const isDanger = game.phase === 'running' && playerCollisions.length > 0;
-  const scene = buildSceneFrame(game);
+  const controls = useMemo(
+    () => [
+      { label: 'Left', action: 'left' as const, icon: '◀' },
+      { label: 'Jump', action: 'jump' as const, icon: '▲' },
+      { label: 'Slide', action: 'slide' as const, icon: '▼' },
+      { label: 'Right', action: 'right' as const, icon: '▶' },
+    ],
+    [],
+  );
 
   return (
-    <main className='app-shell'>
-      <header className='topbar'>
-        <div>
-          <p className='eyebrow'>RUNRUN</p>
-          <h1>Temple Run 3D prototype</h1>
-        </div>
-        <div className='pill-row'>
-          <span className='pill'>Score {game.score}</span>
-          <span className='pill'>Best {game.bestScore}</span>
-          <span className='pill'>Speed {Math.round(game.speed * 10)}</span>
-        </div>
-      </header>
-
-      <section className={'game-stage ' + (isDanger ? 'game-stage--danger' : '')} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-        <div className='scene-stage'>
-          <div className='scene-camera' style={scene.cameraStyle}>
-            <div className='sky-dome' />
-            <div className='jungle-mist jungle-mist--left' />
-            <div className='jungle-mist jungle-mist--right' />
-            <div className='temple-arch temple-arch--left' />
-            <div className='temple-arch temple-arch--right' />
-            <div className='ruins-backdrop' style={scene.backdropStyle}>
-              <div className='ruin ruin--a' />
-              <div className='ruin ruin--b' />
-              <div className='ruin ruin--c' />
-              <div className='ruin ruin--d' />
-            </div>
-
-            <div className='lane-glow' style={scene.laneGlowStyle} />
-            <div className='track-plane' style={scene.trackStyle}>
-              <div className='track-grid' />
-              <div className='track-lane track-lane--left' />
-              <div className='track-lane track-lane--right' />
-              <div className='track-rail track-rail--left' />
-              <div className='track-rail track-rail--right' />
-              <div className='track-crack track-crack--a' />
-              <div className='track-crack track-crack--b' />
-            </div>
-
-            <div className='track-horizon' />
-
-            {game.obstacles.map((obstacle) => (
-              <div
-                key={obstacle.id}
-                className={'obstacle obstacle--' + obstacle.kind}
-                style={{
-                  left: laneToX(obstacle.lane) + '%',
-                  top: obstacle.y + '%',
-                  width: obstacle.kind === 'truck' ? '16%' : '11.5%',
-                  height: obstacle.kind === 'truck' ? '17%' : '13%',
-                  ...buildObstacleStyle(obstacle),
-                }}
-              >
-                <div className='obstacle__body' />
-                <div className='obstacle__shine' />
-                <div className='obstacle__shadow' />
-              </div>
-            ))}
-
-            <div className={'runner-rig ' + (game.phase === 'crashed' ? 'runner-rig--crashed' : '')} style={{ left: laneToX(game.lane) + '%', top: player.top + '%', width: player.width + '%', height: player.height + '%', ...scene.runnerStyle }}>
-              <div className='runner-shadow' />
-              <div className='runner-backpack' />
-              <div className='runner-torso' />
-              <div className='runner-head' />
-              <div className='runner-arm runner-arm--left' />
-              <div className='runner-arm runner-arm--right' />
-              <div className='runner-leg runner-leg--left' />
-              <div className='runner-leg runner-leg--right' />
-              <div className='runner-visor' />
-            </div>
-
-            <div className='glow-ring' />
-          </div>
-        </div>
-
+    <main className='shell'>
+      <div className='viewport-shell'>
+        <div ref={mountRef} className='viewport' />
         <div className='hud'>
-          <div><p className='hud__label'>status</p><p className='hud__value'>{game.phase === 'ready' ? 'Ready' : game.phase === 'running' ? 'Running' : 'Crashed'}</p></div>
-          <div><p className='hud__label'>lane</p><p className='hud__value'>{game.lane + 1} / 3</p></div>
-          <div><p className='hud__label'>route</p><p className='hud__value'>{Math.floor(game.distance * 10)} m</p></div>
+          <header className='hud__top'>
+            <div>
+              <p className='eyebrow'>RUNRUN</p>
+              <h1>Temple Run 3D</h1>
+            </div>
+            <div className='stats'>
+              <div className='stat'><span>score</span><strong>{snapshot.score}</strong></div>
+              <div className='stat'><span>best</span><strong>{snapshot.bestScore}</strong></div>
+              <div className='stat'><span>speed</span><strong>{snapshot.speed.toFixed(1)}</strong></div>
+            </div>
+          </header>
+
+          <section className='hud__status'>
+            <div>
+              <span>phase</span>
+              <strong>{snapshot.phase}</strong>
+            </div>
+            <div>
+              <span>lane</span>
+              <strong>{snapshot.lane + 1} / 3</strong>
+            </div>
+            <div>
+              <span>distance</span>
+              <strong>{snapshot.distance.toFixed(1)} m</strong>
+            </div>
+          </section>
+
+          <section className='hud__message'>
+            <p>{snapshot.message}</p>
+          </section>
+
+          <section className='hud__controls'>
+            {controls.map((control) => (
+              <button
+                key={control.label}
+                type='button'
+                className='control'
+                onClick={() => engineRef.current?.control(control.action)}
+                aria-label={control.label}
+              >
+                <span>{control.icon}</span>
+                <small>{control.label}</small>
+              </button>
+            ))}
+            <button type='button' className='control control--wide' onClick={() => engineRef.current?.control('restart')}>
+              Restart
+            </button>
+          </section>
         </div>
-
-        <div className='lane-sense'><span>Swipe left / right</span><span>or tap to start</span></div>
-
-        {game.phase === 'ready' && (
-          <div className='overlay overlay--ready'>
-            <p className='overlay__eyebrow'>Tap to start</p>
-            <h2>Temple bridge, behind-the-back camera, live 3D runner.</h2>
-            <p>The runner, ruins, and perspective tunnel are now rendered as a polished Temple Run-style scene with smoother motion, depth layers, and cleaner lighting.</p>
-          </div>
-        )}
-
-        {game.phase === 'crashed' && (
-          <div className='overlay overlay--crashed'>
-            <p className='overlay__eyebrow'>Run ended</p>
-            <h2>Game over.</h2>
-            <p>{game.crashReason ?? 'You crashed.'} Final score: {game.score}.</p>
-            <button className='primary-button' onClick={restart}>Restart</button>
-          </div>
-        )}
-      </section>
-
-      <footer className='controls'>
-        <button className='control-button' onClick={() => queueMove(-1)} aria-label='Move left'>◀</button>
-        <button className='control-button control-button--wide' onClick={restart}>Restart</button>
-        <button className='control-button' onClick={() => queueMove(1)} aria-label='Move right'>▶</button>
-      </footer>
+      </div>
     </main>
   );
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
