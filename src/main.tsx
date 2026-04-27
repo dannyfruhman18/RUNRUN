@@ -122,7 +122,7 @@ function App() {
       <header className='topbar'>
         <div>
           <p className='eyebrow'>RUNRUN</p>
-          <h1>3D runner prototype</h1>
+          <h1>Temple Run 3D prototype</h1>
         </div>
         <div className='pill-row'>
           <span className='pill'>Score {game.score}</span>
@@ -135,6 +135,8 @@ function App() {
         <div className='scene-stage'>
           <div className='scene-camera' style={scene.cameraStyle}>
             <div className='sky-dome' />
+            <div className='jungle-mist jungle-mist--left' />
+            <div className='jungle-mist jungle-mist--right' />
             <div className='cityline'>
               <div className='tower tower--a' />
               <div className='tower tower--b' />
@@ -218,8 +220,8 @@ function App() {
         {game.phase === 'ready' && (
           <div className='overlay overlay--ready'>
             <p className='overlay__eyebrow'>Tap to start</p>
-            <h2>Now rendering in a 3D lane tunnel.</h2>
-            <p>The runner, camera, and road are being shifted into a 3D presentation layer while lane logic stays live.</p>
+            <h2>Temple bridge, behind-the-back camera, live 3D runner.</h2>
+            <p>The runner, ruins, and perspective tunnel are now rendered as a Temple Run-style scene with depth, motion, and lane-based collisions.</p>
           </div>
         )}
 
